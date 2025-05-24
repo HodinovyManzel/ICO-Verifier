@@ -15,11 +15,9 @@ button{cursor:pointer;border:none;border-radius:6px;font-weight:600;
        padding:9px 18px;font-size:1rem;background:var(--accent);color:#fff}
 button:hover{opacity:.93}
 
-/* ---------- společná řádka ----------------------------------------- */
 .item{display:flex;gap:24px;margin-bottom:18px;align-items:flex-start}
 @media(max-width:800px){.item{flex-direction:column}}
 
-/* ---------- vstupní karta ------------------------------------------ */
 .inputCard{
   flex:0 0 420px;display:flex;flex-direction:column;gap:12px;
   background:#fff;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.08);
@@ -33,7 +31,6 @@ button:hover{opacity:.93}
       font-size:1.1rem;cursor:pointer}
 .verify{align-self:flex-start;font-size:.9rem}
 
-/* ---------- výsledková karta --------------------------------------- */
 .resultCard{
   flex:1;background:#fff;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.08);
   padding:16px;font-size:.9rem;line-height:1.45em;min-height:72px
@@ -82,10 +79,8 @@ function addRow(){
   if(rowsCnt>=MAX_ROWS){alert('Limit 100');return;}
   rowsCnt++;
 
-  /* obal */
   const item=document.createElement('div');item.className='item';
 
-  /* vstupní karta */
   const inCard=document.createElement('div');inCard.className='inputCard';
   inCard.innerHTML=`<h3>Technik #${rowsCnt}</h3>
                     <button class="trash">🗑️</button>
@@ -95,11 +90,9 @@ function addRow(){
   inCard.querySelector('.crafts').replaceWith(craftCheckboxes());
   inCard.querySelector('.trash').onclick=()=>item.remove();
 
-  /* placeholder pro výsledek */
   const outCard=document.createElement('div');outCard.className='resultCard';
   outCard.innerHTML='<div class="placeholder">Zatím neověřeno</div>';
 
-  /* akce ověření */
   inCard.querySelector('.verify').onclick=()=>verifyRow(inCard,outCard);
 
   item.append(inCard,outCard);
@@ -125,7 +118,7 @@ async function verifyRow(inCard,outCard){
       body:JSON.stringify({ICO:ico,'REPORTED SKILLS':crafts})
     });
     if(!r.ok)throw new Error(r.status);
-    const json=await r.json();                  // jen jednou
+    const json=await r.json();
     const d=Array.isArray(json)?json[0]:json;
 
     const cls=d.Status.includes('NEOVĚŘENA')?'fail':
@@ -134,6 +127,8 @@ async function verifyRow(inCard,outCard){
     outCard.innerHTML=`<h4>${ico} <span class="badge ${cls}">${d.Status}</span></h4>
       <table class="tbl">
         <tr><td>Obchodní&nbsp;jméno:</td><td>${d.ObchodniJmeno||'-'}</td></tr>
+        <tr><td>DIČ:</td><td>${d['DIČ']||'-'}</td></tr>
+        <tr><td>Plátce&nbsp;DPH:</td><td>${d['Plátce DPH']||'-'}</td></tr>
         <tr><td>Ověřené:</td><td>${d['Ověřené živnosti']||'-'}</td></tr>
         <tr><td>Chybějící:</td><td>${d['Chybějící živnosti']||'-'}</td></tr>
       </table>`;
@@ -149,7 +144,7 @@ async function verifyAll(){
   for(const inCard of items){
     if(inCard.dataset.verified==='true')continue;
     verifyRow(inCard,inCard.parentElement.querySelector('.resultCard'));
-    await new Promise(r=>setTimeout(r,120));   // krátká prodleva
+    await new Promise(r=>setTimeout(r,120));
   }
 }
 
