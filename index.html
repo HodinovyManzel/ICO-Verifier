@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8" />
+<title>Overenie živností</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+:root{--accent:#0066cc;--green:#2f9e44;--orange:#d68900;--red:#d32f2f;--bg:#f8f9fa;}
+body{margin:0;font-family:system-ui,Arial,sans-serif;background:var(--bg);}
+main{padding:24px;max-width:1300px;margin:auto;box-sizing:border-box}
+header{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+button{cursor:pointer;border:none;border-radius:6px;font-weight:600;padding:9px 18px;font-size:1rem;background:var(--accent);color:#fff}
+button:hover{opacity:.93}
+
+.item{display:flex;gap:24px;margin-bottom:18px;align-items:flex-start}
+@media(max-width:800px){.item{flex-direction:column}}
+
+.inputCard{flex:0 0 420px;display:flex;flex-direction:column;gap:12px;background:#fff;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.08);padding:18px 20px;position:relative}
+.inputCard h3{margin:0;font-size:1rem;color:#222}
+.inputCard input[type=text]{width:200px;padding:8px;font-size:.95rem}
+
+.crafts{display:flex;flex-wrap:wrap;gap:12px}
+.crafts label{font-size:.88rem;white-space:nowrap}
+.skNotice{font-size:.8rem;color:#d32f2f}
+
+.trash{position:absolute;top:10px;right:10px;background:none;border:none;font-size:1.1rem;cursor:pointer}
+.verify{align-self:flex-start;font-size:.9rem}
+
+.countryToggle{display:flex;gap:10px;align-items:center}
+.countryToggle span{cursor:pointer;font-size:1.5rem;opacity:.4;transition:.15s}
+.countryToggle .selected{opacity:1;transform:scale(1.1)}
+.hidden{display:none}
+
+.resultCard{flex:1;background:#fff;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,.08);padding:16px;font-size:.9rem;line-height:1.45em;min-height:72px}
+.resultCard h4{margin:0 0 6px;font-size:1rem;font-weight:600}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.8rem;color:#fff;font-weight:600}
+.ok{background:var(--green)}.partial{background:var(--orange)}.fail{background:var(--red)}
+
+.tbl{margin-top:6px;border-collapse:collapse;width:100%}
+.tbl td{padding:4px 6px;border-bottom:1px solid #eee}
+.tbl td:first-child{width:150px;font-weight:600;white-space:nowrap}
+.tbl td:last-child{word-break:break-word;max-width:640px}
+
+.placeholder{color:#888;font-style:italic;font-size:.88rem}
+</style>
+</head>
+<body>
+
+<main>
+  <header>
+    <button id="add">➕ Pridať technika</button>
+    <button id="verifyAll">✅ Overiť všetkých</button>
+  </header>
+
+  <p style="margin:-10px 0 18px 0;font-size:0.9rem;font-weight:600;">
+    Ak je to možné, vypíš si vždy čo najviac technikov naraz a vyhľadaj ich hromadne.
+    Čím menej vyhľadávaní, tým menej to stojí a hromadné vyhľadávanie sa počíta ako jedno :-)
+  </p>
+
+  <div id="list"></div>
+</main>
+
+<script>
+const WEBHOOK_URL='https://dejvharby.app.n8n.cloud/webhook/New';
+const CRAFTS=['Boilers','Heating','Keyservice','Plumber','Electrician','Electronics','Gas','Unblocking'];
+const MAX_ROWS=100;
+
+/*--- helpers ---------------------------------------------------------*/
+function craftCheckboxes(){
+  const wrap=document.createElement('div');wrap.className='crafts';
+  CRAFTS.forEach(c=>{
+    const l=document.createElement('label');
+    const cb=document.createElement('input');cb.type='checkbox';cb.value=c;
+    l.append(cb,' ',c);wrap.append(l);
+  });
+  return wrap;
+}
+
+function countryToggle(){
+  const box=document.createElement('div');box.className='countryToggle';
+  const cz=document.createElement('span');cz.textContent='🇨🇿';cz.dataset.country='CZ';
+  const sk=document.createElement('span');sk.textContent='🇸🇰';sk.dataset.country='SK';
+  cz.classList.add('selected');
+
+  function applyCountry(el){
+    const card=el.closest('.inputCard');
+    const crafts=card.querySelector('.crafts');
+    const notice=card.querySelector('.skNotice');
+    if(el.dataset.country==='SK'){
+      crafts.classList.add('hidden'); notice.classList.remove('hidden');
+    }else{
+      crafts.classList.remove('hidden'); notice.classList.add('hidden');
+    }
+  }
+
+  [cz,sk].forEach(el=>{
+    el.onclick=()=>{
+      el.parentElement.querySelectorAll('span').forEach(s=>s.classList.remove('selected'));
+      el.classList.add('selected');
+      applyCountry(el);
+    };
+  });
+  box.append(cz,sk);return box;
+}
+
+/*--- add new row -----------------------------------------------------*/
+let rowsCnt=0;
+function addRow(){
+  if(rowsCnt>=MAX_ROWS){alert('Limit 100');return;}
+  rowsCnt++;
+
+  const item=document.createElement('div');item.className='item';
+  const inCard=document.createElement('div');inCard.className='inputCard';
+  inCard.innerHTML=`
+    <h3>Technik #${rowsCnt}</h3>
+    <button class="trash">🗑️</button>
+    <input type="text" placeholder="IČO (8 číslic)">
+    <div class="countryPlaceholder"></div>
+    <div class="crafts"></div>
+    <div class="skNotice hidden">Pri slovenských technikoch nedokážeme overiť živnosť. Vrátia sa iba fakturačné údaje.</div>
+    <button class="verify">Overiť</button>`;
+  inCard.querySelector('.countryPlaceholder').replaceWith(countryToggle());
+  inCard.querySelector('.crafts').replaceWith(craftCheckboxes());
+  inCard.querySelector('.trash').onclick=()=>item.remove();
+
+  const outCard=document.createElement('div');outCard.className='resultCard';
+  outCard.innerHTML='<div class="placeholder">Zatiaľ neoverené</div>';
+
+  inCard.querySelector('.verify').onclick=()=>verifyRow(inCard,outCard);
+
+  item.append(inCard,outCard);
+  document.getElementById('list').append(item);
+}
+
+/*--- verify one ------------------------------------------------------*/
+async function verifyRow(inCard,outCard){
+  if(inCard.dataset.verified==='true')return;
+
+  const ico=inCard.querySelector('input[type=text]').value.trim();
+  const country=inCard.querySelector('.countryToggle .selected').dataset.country;
+  let crafts='';
+
+  if(country==='CZ'){
+    crafts=Array.from(inCard.querySelectorAll('.crafts input:checked'))
+                .map(cb=>cb.value).join(', ');
+  }
+
+  const btn=inCard.querySelector('.verify');btn.textContent='⏳';
+
+  if(!/^\d{8}$/.test(ico)){alert('Zadaj platné IČO (8 číslic)');btn.textContent='Overiť';return;}
+  if(country==='CZ' && !crafts){alert('Vyber aspoň jedno remeslo');btn.textContent='Overiť';return;}
+
+  try{
+    const res=await fetch(WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ICO:ico,country,'REPORTED SKILLS':crafts})});
+    const json=await res.json();
+    const d=Array.isArray(json)?json[0]:json;
+
+    /*---------------- chyba z n8n ----------------*/
+    if(!res.ok || d.error){
+      outCard.innerHTML='<div class="placeholder" style="color:#d32f2f;">CHYBA – Skús skontrolovať údaje a národnosť.</div>';
+      btn.textContent='Overiť';
+      return;
+    }
+
+    /*---------------- DIČ & DPH ------------------*/
+    const dic=(d['DIČ']||'').trim();
+    const vatCell=(country==='SK')?( /\d/.test(dic) ? 'Áno' : 'Nie' ):(d['Plátce DPH']||'-');
+    const dicRow=dic?`<tr><td>DIČ:</td><td>${dic}</td></tr>`:'';
+
+    /*---------------- CZ only fields -------------*/
+    let badgeHTML='',tradesHTML='';
+    if(country==='CZ'){
+      const rawStatus=d.Status||'';
+      const cls=(rawStatus.includes('NEOVĚŘENA')||rawStatus.includes('NEOVĚŘENO'))?'fail':rawStatus.includes('ČÁSTEČNĚ')?'partial':'ok';
+      /* slovak translation pre stav */
+      const statusSk=rawStatus
+        .replace('NEOVĚŘENA','NEOVERENÁ')
+        .replace('NEOVĚŘENO','NEOVERENÉ')
+        .replace('ČÁSTEČNĚ','ČIASTOČNE')
+        .replace('OVĚŘENA','OVERENÁ');
+
+      badgeHTML=` <span class="badge ${cls}">${statusSk}</span>`;
+      tradesHTML=`<tr><td>Overené&nbsp;živnosti:</td><td>${d['Ověřené živnosti']||'-'}</td></tr>
+                  <tr><td>Chýbajúce&nbsp;živnosti:</td><td>${d['Chybějící živnosti']||'-'}</td></tr>`;
+    }
+
+    const headerName=(d.ObchodniJmeno||'Neznáme obchodné meno').trim();
+
+    outCard.innerHTML=`<h4>${headerName}${badgeHTML}</h4>
+      <table class="tbl">
+        ${dicRow}
+        <tr><td>Platca&nbsp;DPH:</td><td>${vatCell}</td></tr>
+        <tr><td>Adresa:</td><td>${d.Adresa||'-'}</td></tr>
+        ${tradesHTML}
+      </table>`;
+
+    inCard.dataset.verified='true';
+    btn.textContent='✓';btn.disabled=true;
+  }catch(err){
+    outCard.innerHTML='<div class="placeholder" style="color:#d32f2f;">CHYBA – Skús skontrolovať údaje a národnosť.</div>';
+    btn.textContent='Overiť';
+  }
+}
+
+/*--- verify all ------------------------------------------------------*/
+async function verifyAll(){
+  const cards=document.querySelectorAll('.inputCard');
+  for(const card of cards){
+    if(card.dataset.verified==='true')continue;
+    verifyRow(card,card.parentElement.querySelector('.resultCard'));
+    await new Promise(r=>setTimeout(r,120));
+  }
+}
+
+/*--- init ------------------------------------------------------------*/
+document.getElementById('add').onclick=addRow;
+document.getElementById('verifyAll').onclick=verifyAll;
+addRow();
+</script>
+
+</body>
+</html>
